@@ -19,39 +19,57 @@ public class CalculoServiceImpl implements CalculoService {
     private final TabelaTarifariaRepository tabelaRepo;
     private final FaixaTarifariaRepository faixaRepo;
 
+    @Override
     public CalculoResponse calcular(CalculoRequest req) {
-        Categoria categoria = Categoria.valueOf(req.getCategoria());
-        Integer consumo = req.getConsumo();
-        TabelaTarifaria tabela = tabelaRepo.findFirstByActiveTrueOrderByVigenciaDesc()
-                .orElseThrow(() -> new IllegalStateException("Nenhuma tabela ativa encontrada"));
-
-        List<FaixaTarifaria> faixas = faixaRepo.findByTabelaIdAndCategoriaOrderByInicioAsc(tabela.getId(), categoria);
-        if (faixas.isEmpty()) throw new IllegalArgumentException("Nenhuma faixa cadastrada para categoria " + categoria);
+        final Categoria categoria = Categoria.valueOf(req.getCategoria());
+        final int consumo = req.getConsumo();
+        final TabelaTarifaria tabela = obterTabelaAtiva();
+        final List<FaixaTarifaria> faixas = obterFaixasPorCategoria(tabela.getId(), categoria);
 
         BigDecimal valorTotal = BigDecimal.ZERO;
-        List<CalculoResponse.Item> detalhamento = new ArrayList<>();
+        final List<CalculoResponse.Item> detalhamento = new ArrayList<>();
 
-        for (FaixaTarifaria f : faixas) {
-            int m3Cobrados = 0;
-            if (f.getInicio() == 0) {
-                m3Cobrados = Math.max(0, Math.min(consumo, f.getFim()) - 0);
-            } else {
-                m3Cobrados = Math.max(0, Math.min(consumo, f.getFim()) - (f.getInicio() - 1));
-            }
+        for (final FaixaTarifaria faixa : faixas) {
+            final int m3Cobrados = calcularM3Cobrados(faixa, consumo);
+
             if (m3Cobrados > 0) {
-                BigDecimal subtotal = f.getValorUnitario().multiply(BigDecimal.valueOf(m3Cobrados));
+                final BigDecimal subtotal = faixa.getValorUnitario().multiply(BigDecimal.valueOf(m3Cobrados));
                 valorTotal = valorTotal.add(subtotal);
-                CalculoResponse.Item item = new CalculoResponse.Item(
-                        new CalculoResponse.Faixa(f.getInicio(), f.getFim()),
-                        m3Cobrados,
-                        f.getValorUnitario(),
-                        subtotal
-                );
-                detalhamento.add(item);
+                detalhamento.add(criarItem(faixa, m3Cobrados, subtotal));
             }
-            if (consumo <= f.getFim()) break;
+
+            if (consumo <= faixa.getFim()) break;
         }
 
         return new CalculoResponse(categoria.name(), consumo, valorTotal, detalhamento);
+    }
+
+    private TabelaTarifaria obterTabelaAtiva() {
+        return tabelaRepo.findFirstByActiveTrueOrderByVigenciaDesc()
+                .orElseThrow(() -> new IllegalStateException("Nenhuma tabela ativa encontrada"));
+    }
+
+    private List<FaixaTarifaria> obterFaixasPorCategoria(Long tabelaId, Categoria categoria) {
+        final List<FaixaTarifaria> faixas = faixaRepo.findByTabelaIdAndCategoriaOrderByInicioAsc(tabelaId, categoria);
+        if (faixas.isEmpty()) {
+            throw new IllegalArgumentException("Nenhuma faixa cadastrada para categoria " + categoria);
+        }
+        return faixas;
+    }
+
+    private int calcularM3Cobrados(FaixaTarifaria faixa, int consumo) {
+        final int lowerBound = faixa.getInicio() == 0 ? 0 : faixa.getInicio() - 1;
+        final int upperBound = faixa.getFim();
+        final int covered = Math.min(consumo, upperBound) - lowerBound;
+        return Math.max(0, covered);
+    }
+
+    private CalculoResponse.Item criarItem(FaixaTarifaria faixa, int m3Cobrados, BigDecimal subtotal) {
+        return new CalculoResponse.Item(
+                new CalculoResponse.Faixa(faixa.getInicio(), faixa.getFim()),
+                m3Cobrados,
+                faixa.getValorUnitario(),
+                subtotal
+        );
     }
 }
