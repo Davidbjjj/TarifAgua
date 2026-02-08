@@ -18,17 +18,26 @@ public class TabelaServiceImpl implements TabelaService {
 
     @Transactional
     public TabelaTarifaria createTabela(TabelaRequest req) {
+        if (req == null) {
+            throw new IllegalArgumentException("Request não pode ser nulo");
+        }
+        if (req.getNome() == null || req.getNome().isBlank()) {
+            throw new IllegalArgumentException("Nome da tabela é obrigatório");
+        }
+        if (req.getCategorias() == null || req.getCategorias().isEmpty()) {
+            throw new IllegalArgumentException("Pelo menos uma categoria é obrigatória");
+        }
 
         TabelaTarifaria tabela = TabelaTarifaria.builder()
                 .nome(req.getNome())
                 .vigencia(req.getVigencia())
-                .active(req.isActive())
+                .active(true)
                 .build();
 
         Set<FaixaTarifaria> faixas = new HashSet<>();
         for (TabelaRequest.CategoriaDto cat : req.getCategorias()) {
             Categoria categoria = Categoria.valueOf(cat.getCategoria());
-            // validate per-category
+
             List<TabelaRequest.FaixaDto> lista = cat.getFaixas().stream()
                     .sorted(Comparator.comparingInt(TabelaRequest.FaixaDto::getInicio))
                     .collect(Collectors.toList());
@@ -65,9 +74,14 @@ public class TabelaServiceImpl implements TabelaService {
         }
         tabela.setFaixas(faixas);
 
-
-        if (tabela.isActive()) {
-            tabelaRepo.findAll().stream().filter(TabelaTarifaria::isActive).forEach(t -> { t.setActive(false); tabelaRepo.save(t); });
+        // Se a nova tabela está ativa, desativar todas as outras
+        if (tabela.getActive()) {
+            tabelaRepo.findAll().stream()
+                    .filter(TabelaTarifaria::getActive)
+                    .forEach(t -> {
+                        t.setActive(false);
+                        tabelaRepo.save(t);
+                    });
         }
         return tabelaRepo.save(tabela);
     }
