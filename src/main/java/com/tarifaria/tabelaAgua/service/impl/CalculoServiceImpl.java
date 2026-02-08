@@ -54,6 +54,9 @@ public class CalculoServiceImpl implements CalculoService {
         if (faixas.isEmpty()) {
             throw new IllegalArgumentException("Nenhuma faixa cadastrada para categoria " + categoria);
         }
+        if (faixas.get(0).getInicio() != 0) {
+            throw new IllegalStateException("A primeira faixa da categoria " + categoria + " deve iniciar em 0 m³, mas inicia em " + faixas.get(0).getInicio());
+        }
         return faixas;
     }
 

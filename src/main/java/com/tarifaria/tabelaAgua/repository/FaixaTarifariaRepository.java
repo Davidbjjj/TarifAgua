@@ -11,4 +11,8 @@ public interface FaixaTarifariaRepository extends JpaRepository<FaixaTarifaria, 
     List<FaixaTarifaria> findByTabelaAndCategoriaOrderByInicioAsc(TabelaTarifaria tabela, Categoria categoria);
 
     List<FaixaTarifaria> findByTabelaIdAndCategoriaOrderByInicioAsc(Long tabelaId, Categoria categoria);
+
+    List<FaixaTarifaria> findByTabelaActiveTrueAndCategoriaOrderByInicioAsc(Categoria categoria);
+
+    boolean existsByTabelaIdAndCategoria(Long tabelaId, Categoria categoria);
 }
