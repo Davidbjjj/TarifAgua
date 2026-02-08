@@ -3,6 +3,7 @@ package com.tarifaria.tabelaAgua.service.impl;
 import com.tarifaria.tabelaAgua.dto.TabelaRequest;
 import com.tarifaria.tabelaAgua.model.*;
 import com.tarifaria.tabelaAgua.repository.TabelaTarifariaRepository;
+import com.tarifaria.tabelaAgua.repository.FaixaTarifariaRepository;
 import com.tarifaria.tabelaAgua.service.TabelaService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -15,6 +16,7 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class TabelaServiceImpl implements TabelaService {
     private final TabelaTarifariaRepository tabelaRepo;
+    private final FaixaTarifariaRepository faixaRepo;
 
     @Transactional
     public TabelaTarifaria createTabela(TabelaRequest req) {
@@ -87,15 +89,34 @@ public class TabelaServiceImpl implements TabelaService {
     }
 
     public List<TabelaTarifaria> listAll() {
+        // Retorna todas as tabelas (ativas e inativas) conforme solicitado
         return tabelaRepo.findAll();
     }
 
     @Transactional
     public void deleteTabela(Long id) {
-        tabelaRepo.findById(id).ifPresent(t -> {
-            t.setActive(false);
-            tabelaRepo.save(t);
-        });
+        // verifica se a tabela existe, lançando exceção se não encontrada
+        if (!tabelaRepo.existsById(id)) {
+            throw new NoSuchElementException("Tabela não encontrada: " + id);
+        }
+
+        // deleta a tabela de verdade do banco de dados (incluindo as faixas por cascade)
+        tabelaRepo.deleteById(id);
+    }
+
+    @Override
+    public List<FaixaTarifaria> listFaixasByCategoria(String categoria) {
+        if (categoria == null || categoria.isBlank()) {
+            throw new IllegalArgumentException("Categoria é obrigatória");
+        }
+        Categoria catEnum;
+        try {
+            catEnum = Categoria.valueOf(categoria);
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Categoria inválida: " + categoria);
+        }
+
+        // Busca faixas que pertencem a tabelas ativas, filtrando por categoria e ordenando por inicio
+        return faixaRepo.findByTabelaActiveTrueAndCategoriaOrderByInicioAsc(catEnum);
     }
 }
-
